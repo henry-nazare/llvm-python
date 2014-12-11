@@ -51,7 +51,9 @@ public:
   PyObject *getBuiltin(const char *Attr);
 
   PyObject *createTuple(std::initializer_list<PyObject*> Items);
+
   PythonObjVec *createObjVec(std::initializer_list<PythonObjInfo> Infos);
+  PythonObjVec *createObjVec(std::vector<PythonObjInfo> Infos);
 
   PyObject *call(PyObject *Fn, PyObject *Tuple);
   PyObject *call(PyObject *Fn, std::initializer_list<PyObject*> Items);

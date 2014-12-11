@@ -81,6 +81,11 @@ PyObject
 
 PythonInterface::PythonObjVec
   *PythonInterface::createObjVec(std::initializer_list<PythonObjInfo> Infos) {
+  return createObjVec(std::vector<PythonObjInfo>(Infos));
+}
+
+PythonInterface::PythonObjVec
+  *PythonInterface::createObjVec(std::vector<PythonObjInfo> Infos) {
   std::vector<PyObject*> Functions;
 
   for (auto &Info : Infos) {
