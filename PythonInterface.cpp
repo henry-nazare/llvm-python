@@ -1,6 +1,8 @@
 //===------------------------- PythonInterface.cpp ------------------------===//
 //===----------------------------------------------------------------------===//
 
+#define DEBUG_TYPE "python-interface"
+
 #include "PythonInterface.h"
 
 #include "llvm/Support/CommandLine.h"
