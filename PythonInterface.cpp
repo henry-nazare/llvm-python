@@ -20,6 +20,21 @@ static RegisterPass<PythonInterface>
   X("python-interface", "LLVM/Python interface");
 char PythonInterface::ID = 0;
 
+std::string PythonInterface::toString(PyObject *String) {
+  return PyString_AsString(String);
+}
+
+std::vector<PyObject*> PythonInterface::toVector(PyObject *List) {
+  assert(PyList_Check(List) && "PyObject is not a list");
+
+  std::vector<PyObject*> Vec;
+  Py_ssize_t Size = PyList_Size(List);
+  for (Py_ssize_t Idx = 0; Idx < Size; ++Idx) {
+    Vec.push_back(PyList_GetItem(List, Idx));
+  }
+  return Vec;
+}
+
 bool PythonInterface::doInitialization(Module&) {
   static char *Argv[] = { (char*)"opt" };
   Py_Initialize();
