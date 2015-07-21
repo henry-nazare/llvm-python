@@ -37,6 +37,9 @@ public:
   static char ID;
   PythonInterface() : ModulePass(ID) { }
 
+  static std::string toString(PyObject *String);
+  static std::vector<PyObject*> toVector(PyObject *List);
+
   virtual bool runOnModule(Module&) {
     return false;
   }
