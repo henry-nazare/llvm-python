@@ -5,6 +5,7 @@
 
 #include "PythonInterface.h"
 
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 
@@ -20,19 +21,39 @@ static RegisterPass<PythonInterface>
   X("python-interface", "LLVM/Python interface");
 char PythonInterface::ID = 0;
 
-std::string PythonInterface::toString(PyObject *String) {
-  return PyString_AsString(String);
+static PyObject *GetModule(const char *Mod) {
+  PyObject *ModStr = PyString_FromString(Mod);
+  return PyImport_Import(ModStr);
 }
 
-std::vector<PyObject*> PythonInterface::toVector(PyObject *List) {
-  assert(PyList_Check(List) && "PyObject is not a list");
+static PyObject *GetClass(const char *Mod, const char *Class) {
+  PyEval_GetBuiltins();
+  PyObject *DictObj = PyModule_GetDict(GetModule(Mod));
+  return PyDict_GetItemString(DictObj, Class);
+}
 
-  std::vector<PyObject*> Vec;
-  Py_ssize_t Size = PyList_Size(List);
-  for (Py_ssize_t Idx = 0; Idx < Size; ++Idx) {
-    Vec.push_back(PyList_GetItem(List, Idx));
+static PyObject *GetAttr(const char *Mod, const char *Class, const char *Attr) {
+  PyObject *ClassObj = GetClass(Mod, Class);
+  return PyObject_GetAttrString(ClassObj, Attr);
+}
+
+static PyObject *GetAttr(const char *Mod, const char *Attr) {
+  return PyObject_GetAttrString(GetModule(Mod), Attr);
+}
+
+static PyObject *GetBuiltin(const char *Attr) {
+  PyObject *Builtins = PyEval_GetBuiltins();
+  return PyDict_GetItemString(Builtins, Attr);
+}
+
+static PyObject *CreateTuple(std::initializer_list<PyObject*> Items) {
+  PyObject *Tuple = PyTuple_New(Items.size());
+  unsigned Idx = 0;
+  for (auto &Item : Items) {
+    PyTuple_SetItem(Tuple, Idx++, Item);
   }
-  return Vec;
+
+  return Tuple;
 }
 
 bool PythonInterface::doInitialization(Module&) {
@@ -47,133 +68,61 @@ bool PythonInterface::doFinalization(Module&) {
   return true;
 }
 
-PyObject *PythonInterface::getModule(const char *Mod) {
-  auto It = Modules_.find(Mod);
-  if (It != Modules_.end()) {
-    return It->second;
+bool PythonObjInfo::populate() {
+  if (!strcmp(Mod_, "__builtins__")) {
+    Obj_ = GetBuiltin(Fn_);
+  } else if (Class_) {
+    Obj_ = Fn_ ? GetAttr(Mod_, Class_, Fn_) : GetClass(Mod_, Class_);
+  } else {
+    Obj_ = GetAttr(Mod_, Fn_);
   }
 
-  PyObject *ModStr = PyString_FromString(Mod);
-  PyObject *ModObj = PyImport_Import(ModStr);
-  Modules_[Mod] = ModObj;
-  return ModObj;
-}
-
-PyObject *PythonInterface::getClass(const char *Mod, const char *Class) {
-  auto It = Classes_.find(std::make_pair(Mod, Class));
-  if (It != Classes_.end()) {
-    return It->second;
+  if (Obj_) {
+    return true;
   }
 
-  PyEval_GetBuiltins();
-  PyObject *DictObj = PyModule_GetDict(getModule(Mod));
-  PyObject *ClassObj = PyDict_GetItemString(DictObj, Class);
-  Classes_[std::make_pair(Mod, Class)] = ClassObj;
-  return ClassObj;
-}
-
-PyObject *PythonInterface::getAttr(const char *Mod, const char *Class,
-                                   const char *Attr) {
-  PyObject *ClassObj = getClass(Mod, Class);
-  return PyObject_GetAttrString(ClassObj, Attr);
-}
-
-PyObject *PythonInterface::getAttr(const char *Mod, const char *Attr) {
-  return PyObject_GetAttrString(getModule(Mod), Attr);
-}
-
-PyObject *PythonInterface::getBuiltin(const char *Attr) {
-  PyObject *Builtins = PyEval_GetBuiltins();
-  return PyDict_GetItemString(Builtins, Attr);
-}
-
-PyObject
-  *PythonInterface::createTuple(std::initializer_list<PyObject*> Items) {
-  PyObject *Tuple = PyTuple_New(Items.size());
-  unsigned Idx = 0;
-  for (auto &Item : Items)
-    PyTuple_SetItem(Tuple, Idx++, Item);
-  return Tuple;
-}
-
-PythonInterface::PythonObjVec
-  *PythonInterface::createObjVec(std::initializer_list<PythonObjInfo> Infos) {
-  return createObjVec(std::vector<PythonObjInfo>(Infos));
-}
-
-PythonInterface::PythonObjVec
-  *PythonInterface::createObjVec(std::vector<PythonObjInfo> Infos) {
-  std::vector<PyObject*> Functions;
-
-  for (auto &Info : Infos) {
-    PyObject *Fn;
-    if (!strcmp(Info.Mod, "__builtins__")) {
-      Fn = getBuiltin(Info.Fn);
-    } else if (Info.Class) {
-      Fn = Info.Fn ? getAttr(Info.Mod, Info.Class, Info.Fn)
-                   : getClass(Info.Mod, Info.Class);
+  if (Class_) {
+    if (Fn_) {
+      errs() << "PythonInterface: could not get member function " << Mod_ << "."
+          << Class_ << "." << Fn_ << "\n";
     } else {
-      Fn = getAttr(Info.Mod, Info.Fn);
+      errs() << "PythonInterface: could not get class " << Mod_ << "." << Class_
+          << "\n";
     }
-
-    if (!Fn) {
-      if (Info.Class) {
-        if (Info.Fn)
-          errs() << "PythonInterface: could not get member function "
-                 << Info.Mod << "." << Info.Class << "." << Info.Fn << "\n";
-        else
-          errs() << "PythonInterface: could not get class " << Info.Mod
-                 << "." << Info.Class << "\n";
-      } else {
-        errs() << "PythonInterface: could not get module function "
-               << Info.Mod << "." << Info.Fn << "\n";
-      }
-      return nullptr;
-    }
-
-    Functions.push_back(Fn);
+  } else {
+    errs() << "PythonInterface: could not get module function " << Mod_ << "."
+        << Fn_ << "\n";
   }
 
-  return new PythonObjVec(Functions);
+  return false;
 }
 
-PyObject *PythonInterface::call(PyObject *Fn, PyObject *Tuple) {
-  DEBUG(dbgs() << "PythonInterface: call: " << *Fn << *Tuple << "\n");
-  return PyObject_CallObject(Fn, Tuple);
+PyObject *PythonObjInfo::operator()(std::initializer_list<PyObject*> Items) {
+  if (!populate()) {
+    assert(false && "Could not find requested Python function");
+  }
+
+  PyObject *Res = PyObject_CallObject(Obj_, CreateTuple(Items));
+  if (PyErr_Occurred()) {
+    PyErr_Print();
+    assert(false && "Python returned an exception");
+  }
+
+  return Res;
 }
 
-PyObject *PythonInterface::call(PythonObjVec *Vec, unsigned Idx,
-                                PyObject *Tuple) {
-  return call(Vec->getObj(Idx), Tuple);
+llvmpy::topy<int>::topy(int Int) : TopyBase(PyInt_FromLong(Int)) {
 }
 
-PyObject *PythonInterface::call(PythonObjVec *Vec, unsigned Idx,
-                                std::initializer_list<PyObject*> Items) {
-  PyObject *Tuple = createTuple(Items);
-  return call(Vec, Idx, Tuple);
+llvmpy::topy<const char*>::topy(const char *Str)
+    : TopyBase(PyString_FromString(Str)) {
 }
 
-PyObject *PythonInterface::call(PyObject *Fn,
-                                std::initializer_list<PyObject*> Items) {
-  PyObject *Tuple = createTuple(Items);
-  return call(Fn, Tuple);
+llvmpy::topy<std::string>::topy(std::string Str)
+    : llvmpy::topy<const char*>(Str.c_str()) {
 }
 
-PyObject *PythonInterface::callSelf(PyObject *FnStr, PyObject *Self,
-                                    PyObject *Tuple) {
-  PyObject *FnObj = PyObject_GetAttr(Self, FnStr);
-  return call(FnObj, Tuple);
-}
-
-PyObject *PythonInterface::callSelf(const char *Fn, PyObject *Self,
-                                    PyObject *Tuple) {
-  PyObject *FnStr = PyString_FromString(Fn);
-  return callSelf(FnStr, Self, Tuple);
-}
-
-PyObject *PythonInterface::callSelf(const char *Fn, PyObject *Self,
-                                    std::initializer_list<PyObject*> Items) {
-  PyObject *Tuple = createTuple(Items);
-  return callSelf(Fn, Self, Tuple);
+llvmpy::topy<APInt>::topy(APInt Int)
+    : TopyBase(PyInt_FromLong(Int.getSExtValue())) {
 }
 

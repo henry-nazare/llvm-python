@@ -4,41 +4,19 @@
 #include <python2.7/Python.h>
 
 #include "llvm/Pass.h"
+#include "llvm/ADT/APInt.h"
 #include "llvm/IR/Instructions.h"
-#include "llvm/Support/raw_ostream.h"
-
-#include <vector>
 
 using namespace llvm;
+
+raw_ostream& operator<<(raw_ostream& OS, PyObject &Obj);
 
 // A ModulePass allows global initialization and finalization, which we need
 // for calling Py_Init and Py_Finalize.
 class PythonInterface : public ModulePass {
 public:
-  // Holds each object we need to get a reference to.
-  struct PythonObjInfo {
-    PythonObjInfo(const char *Mod, const char *Fn)
-      : Mod(Mod), Class(nullptr), Fn(Fn) { }
-    PythonObjInfo(const char *Mod, const char *Class, const char *Fn)
-      : Mod(Mod), Class(Class), Fn(Fn) { }
-
-    const char *Mod, *Class, *Fn;
-  };
-
-  // Holds the looked-up objects.
-  struct PythonObjVec : public std::vector<PyObject*> {
-    PythonObjVec(std::vector<PyObject*> Objs) : std::vector<PyObject*>(Objs) { }
-
-    PyObject *getObj(unsigned Idx) const {
-      return (*this).at(Idx);
-    }
-  };
-
   static char ID;
   PythonInterface() : ModulePass(ID) { }
-
-  static std::string toString(PyObject *String);
-  static std::vector<PyObject*> toVector(PyObject *List);
 
   virtual bool runOnModule(Module&) {
     return false;
@@ -46,35 +24,68 @@ public:
 
   virtual bool doInitialization(Module&);
   virtual bool doFinalization(Module&);
-
-  PyObject *getModule (const char *Mod);
-  PyObject *getClass  (const char *Mod, const char *Class);
-  PyObject *getAttr   (const char *Mod, const char *Class, const char *Attr);
-  PyObject *getAttr   (const char *Mod,                    const char *Attr);
-  PyObject *getBuiltin(const char *Attr);
-
-  PyObject *createTuple(std::initializer_list<PyObject*> Items);
-
-  PythonObjVec *createObjVec(std::initializer_list<PythonObjInfo> Infos);
-  PythonObjVec *createObjVec(std::vector<PythonObjInfo> Infos);
-
-  PyObject *call(PyObject *Fn, PyObject *Tuple);
-  PyObject *call(PyObject *Fn, std::initializer_list<PyObject*> Items);
-  PyObject *call(PythonObjVec *Vec, unsigned Idx, PyObject *Tuple);
-  PyObject *call(PythonObjVec *Vec, unsigned Idx,
-                 std::initializer_list<PyObject*> Items);
-
-  PyObject *callSelf(const char *Fn, PyObject *Self, PyObject *Tuple);
-  PyObject *callSelf(PyObject *FnStr, PyObject *Self, PyObject *Tuple);
-  PyObject *callSelf(const char *Fn, PyObject *Self,
-                     std::initializer_list<PyObject*> Items);
-
-private:
-  std::map<const char*, PyObject*> Modules_;
-  std::map<std::pair<const char*, const char*>, PyObject*> Classes_;
 };
 
-raw_ostream& operator<<(raw_ostream& OS, PyObject &Obj);
+// Holds each function we need to get a reference to.
+class PythonObjInfo {
+public:
+  PythonObjInfo(const char *Mod, const char *Fn)
+    : Mod_(Mod), Class_(nullptr), Fn_(Fn) { }
+  PythonObjInfo(const char *Mod, const char *Class, const char *Fn)
+    : Mod_(Mod), Class_(Class), Fn_(Fn) { }
+
+  PyObject *operator()(std::initializer_list<PyObject*> Items);
+
+private:
+  bool populate();
+
+  const char *Mod_, *Class_, *Fn_;
+  PyObject *Obj_;
+};
+
+struct TopyBase {
+  TopyBase(PyObject *Obj) : Obj_(Obj) {}
+
+  virtual PyObject *get() {
+    return Obj_;
+  }
+
+private:
+  PyObject *Obj_;
+};
+
+namespace llvmpy {
+
+template <typename T>
+struct topy {
+};
+
+template <>
+struct topy<int> : public TopyBase {
+  topy(int Int);
+};
+
+template <>
+struct topy<const char*> : public TopyBase {
+  topy(const char *Str);
+};
+
+template <>
+struct topy<std::string> : public topy<const char*> {
+  topy(std::string Str);
+};
+
+template <>
+struct topy<APInt> : public TopyBase {
+  topy(APInt Int);
+};
+
+template <typename T>
+PyObject *Get(const T Val) {
+  return topy<T>(Val).get();
+}
+
+} // end namespace llvmpy
 
 #endif
 
