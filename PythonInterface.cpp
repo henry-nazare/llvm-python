@@ -17,11 +17,6 @@ raw_ostream& operator<<(raw_ostream& OS, PyObject &Obj) {
   return OS;
 }
 
-raw_ostream& operator<<(raw_ostream& OS, llvmpy::PyObjectHolder Holder) {
-  OS << *Holder.get();
-  return OS;
-}
-
 raw_ostream& operator<<(raw_ostream& OS, llvmpy::PyObjectHolder &Holder) {
   OS << *Holder.get();
   return OS;

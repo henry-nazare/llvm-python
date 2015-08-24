@@ -87,7 +87,6 @@ PyObject *Get(const T Val) {
 
 } // end namespace llvmpy
 
-raw_ostream& operator<<(raw_ostream& OS, llvmpy::PyObjectHolder Holder);
 raw_ostream& operator<<(raw_ostream& OS, llvmpy::PyObjectHolder &Holder);
 
 #endif
