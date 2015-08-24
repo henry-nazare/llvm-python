@@ -48,7 +48,7 @@ namespace llvmpy {
 struct PyObjectHolder {
   PyObjectHolder(PyObject *Obj) : Obj_(Obj) {}
 
-  virtual PyObject *get() {
+  virtual PyObject *get() const {
     return Obj_;
   }
 
