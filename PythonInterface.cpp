@@ -17,6 +17,16 @@ raw_ostream& operator<<(raw_ostream& OS, PyObject &Obj) {
   return OS;
 }
 
+raw_ostream& operator<<(raw_ostream& OS, llvmpy::PyObjectHolder Holder) {
+  OS << *Holder.get();
+  return OS;
+}
+
+raw_ostream& operator<<(raw_ostream& OS, llvmpy::PyObjectHolder &Holder) {
+  OS << *Holder.get();
+  return OS;
+}
+
 static RegisterPass<PythonInterface>
   X("python-interface", "LLVM/Python interface");
 char PythonInterface::ID = 0;
@@ -111,11 +121,12 @@ PyObject *PythonObjInfo::operator()(std::initializer_list<PyObject*> Items) {
   return Res;
 }
 
-llvmpy::topy<int>::topy(int Int) : TopyBase(PyInt_FromLong(Int)) {
+llvmpy::topy<int>::topy(int Int)
+    : llvmpy::PyObjectHolder(PyInt_FromLong(Int)) {
 }
 
 llvmpy::topy<const char*>::topy(const char *Str)
-    : TopyBase(PyString_FromString(Str)) {
+    : llvmpy::PyObjectHolder(PyString_FromString(Str)) {
 }
 
 llvmpy::topy<std::string>::topy(std::string Str)
@@ -123,6 +134,6 @@ llvmpy::topy<std::string>::topy(std::string Str)
 }
 
 llvmpy::topy<APInt>::topy(APInt Int)
-    : TopyBase(PyInt_FromLong(Int.getSExtValue())) {
+    : llvmpy::PyObjectHolder(PyInt_FromLong(Int.getSExtValue())) {
 }
 

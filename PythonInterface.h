@@ -43,8 +43,10 @@ private:
   PyObject *Obj_;
 };
 
-struct TopyBase {
-  TopyBase(PyObject *Obj) : Obj_(Obj) {}
+namespace llvmpy {
+
+struct PyObjectHolder {
+  PyObjectHolder(PyObject *Obj) : Obj_(Obj) {}
 
   virtual PyObject *get() {
     return Obj_;
@@ -54,19 +56,17 @@ private:
   PyObject *Obj_;
 };
 
-namespace llvmpy {
-
 template <typename T>
 struct topy {
 };
 
 template <>
-struct topy<int> : public TopyBase {
+struct topy<int> : public PyObjectHolder {
   topy(int Int);
 };
 
 template <>
-struct topy<const char*> : public TopyBase {
+struct topy<const char*> : public PyObjectHolder {
   topy(const char *Str);
 };
 
@@ -76,7 +76,7 @@ struct topy<std::string> : public topy<const char*> {
 };
 
 template <>
-struct topy<APInt> : public TopyBase {
+struct topy<APInt> : public PyObjectHolder {
   topy(APInt Int);
 };
 
@@ -86,6 +86,9 @@ PyObject *Get(const T Val) {
 }
 
 } // end namespace llvmpy
+
+raw_ostream& operator<<(raw_ostream& OS, llvmpy::PyObjectHolder Holder);
+raw_ostream& operator<<(raw_ostream& OS, llvmpy::PyObjectHolder &Holder);
 
 #endif
 
