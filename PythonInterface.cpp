@@ -116,6 +116,12 @@ PyObject *PythonObjInfo::operator()(std::initializer_list<PyObject*> Items) {
   return Res;
 }
 
+PyObject *PythonAttrInfo::get(PyObject *Self) {
+  PyObject *Attr = PyObject_GetAttrString(Self, Attr_);
+  assert(Attr && "Object has no such attribute");
+  return Attr;
+}
+
 llvmpy::topy<int>::topy(int Int)
     : llvmpy::PyObjectHolder(PyInt_FromLong(Int)) {
 }

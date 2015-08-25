@@ -43,6 +43,18 @@ private:
   PyObject *Obj_;
 };
 
+// Holds getters for object attributes.
+class PythonAttrInfo {
+public:
+  PythonAttrInfo(const char *Attr)
+    : Attr_(Attr) { }
+
+  PyObject *get(PyObject *Obj);
+
+private:
+  const char *Attr_;
+};
+
 namespace llvmpy {
 
 struct PyObjectHolder {
