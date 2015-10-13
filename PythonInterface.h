@@ -36,6 +36,28 @@ public:
 
   PyObject *operator()(std::initializer_list<PyObject*> Items);
 
+  std::vector<PyObject*> asVector(std::initializer_list<PyObject*> Items) {
+    PyObject *List = (*this)(Items);
+    assert(PyList_Check(List) && "PyObject is not a list");
+
+    std::vector<PyObject*> Vec;
+    Py_ssize_t Size = PyList_Size(List);
+    for (Py_ssize_t Idx = 0; Idx < Size; ++Idx) {
+      Vec.push_back(PyList_GetItem(List, Idx));
+    }
+    return Vec;
+  }
+
+  std::string asString(std::initializer_list<PyObject*> Items) {
+    PyObject *String = (*this)(Items);
+    return PyString_AsString(String);
+  }
+
+  long asLong(std::initializer_list<PyObject*> Items) {
+    PyObject *Long = (*this)(Items);
+    return PyInt_AsLong(Long);
+  }
+
 private:
   bool populate();
 
@@ -96,6 +118,8 @@ template <typename T>
 PyObject *Get(const T Val) {
   return topy<T>(Val).get();
 }
+
+PyObject *MakeDict(std::map<PyObject*, PyObject*> Dict);
 
 } // end namespace llvmpy
 

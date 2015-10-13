@@ -138,3 +138,11 @@ llvmpy::topy<APInt>::topy(APInt Int)
     : llvmpy::PyObjectHolder(PyInt_FromLong(Int.getSExtValue())) {
 }
 
+PyObject *llvmpy::MakeDict(std::map<PyObject*, PyObject*> Dict) {
+  auto New = PyDict_New();
+  for (auto &P : Dict) {
+    PyDict_SetItem(New, P.first, P.second);
+  }
+  return New;
+}
+
